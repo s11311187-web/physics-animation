@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>波的折射｜物理互動模擬器</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;color:#172033;background:#f5f7fa}
+*{box-sizing:border-box}
+body{margin:0;padding:24px}
+.app{max-width:1180px;margin:auto}
+h1{margin:0 0 8px;font-size:28px}
+.lead{color:#596579;margin:0 0 18px}
+.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,.8fr);gap:16px}
+.card{background:white;border:1px solid #dbe1ea;border-radius:16px;padding:16px}
+svg{display:block;width:100%;height:auto;background:#f8fafc;border:1px solid #dbe1ea;border-radius:12px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+input[type=range]{width:100%;accent-color:#2563eb}
+input[type=number]{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px}
+.sliderrow{display:flex;align-items:center;gap:8px}
+.val{min-width:60px;text-align:right;font-weight:700}
+button{min-height:42px;padding:8px 14px;border:1px solid #cbd5e1;background:white;border-radius:9px;cursor:pointer;font-weight:700}
+button.primary{background:#e8f0ff;border-color:#2563eb}
+.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.result{font:13px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace}
+.check{padding:11px;border:1px solid #dbe1ea;border-radius:10px;margin-top:12px;font-size:13px;line-height:1.6}
+.ok{background:#effaf2}.warning{background:#fff8e8}.error{background:#fff0f0}
+.small{font-size:12px;color:#687386;line-height:1.6}
+hr{border:0;border-top:1px solid #e5e9f0;margin:16px 0}
+@media(max-width:760px){body{padding:12px}.layout{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>波的折射：物理互動模擬器</h1>
+<p class="lead">先由物理定律計算，再由計算結果產生動畫。可調整入射角、頻率與兩種介質的折射率。</p>
+
+<div class="layout">
+<section class="card">
+<svg id="waveSvg" viewBox="0 0 800 520" role="img" aria-label="波由第一介質進入第二介質的折射示意圖"></svg>
+<div class="buttons">
+<button id="startBtn" class="primary">▶ 播放</button>
+<button id="pauseBtn">Ⅱ 暫停</button>
+<button id="stepBtn">⏭ 單步</button>
+<button id="resetBtn">↻ 重設</button>
+</div>
+<p class="small">波前間距由 λ = v/f 計算；折射方向由 Snell 定律 n₁sinθ₁ = n₂sinθ₂ 決定。</p>
+</section>
+
+<aside class="card">
+<h2 style="font-size:19px;margin-top:0">互動參數</h2>
+<div class="controls">
+<div>
+<label for="incAngle">入射角 θ₁</label>
+<div class="sliderrow"><input id="incAngle" type="range" min="0" max="89" step="1" value="35"><span id="incAngleText" class="val">35°</span></div>
+</div>
+<div>
+<label for="frequency">頻率 f</label>
+<div class="sliderrow"><input id="frequency" type="range" min="1" max="20" step="0.5" value="5"><span id="frequencyText" class="val">5 Hz</span></div>
+</div>
+<div>
+<label for="index1">介質 1：n₁</label>
+<input id="index1" type="number" min="1" max="3" step="0.01" value="1.00">
+</div>
+<div>
+<label for="index2">介質 2：n₂</label>
+<input id="index2" type="number" min="1" max="3" step="0.01" value="1.50">
+</div>
+</div>
+
+<hr>
+<h2 style="font-size:19px">物理計算</h2>
+<div id="physicsResult" class="result"></div>
+<div id="lawCheck" class="check ok" aria-live="polite"></div>
+</aside>
+</div>
+
+<section class="card" style="margin-top:16px">
+<h2 style="font-size:19px;margin-top:0">教學</h2>
+<div style="line-height:1.8;color:#596579;font-size:14px">
+<p><b>① 頻率守恆：</b>波跨越介面時，頻率由振源決定，因此 f₁ = f₂。</p>
+<p><b>② 波速改變：</b>本模型使用 v = c/n。折射率越大，波速越小。</p>
+<p><b>③ 波長改變：</b>λ = v/f。因此頻率相同而波速改變時，波長也跟著改變。</p>
+<p><b>④ 方向改變：</b>Snell 定律 n₁sinθ₁ = n₂sinθ₂ 決定折射角。</p>
+<p><b>⑤ 全反射：</b>當 n₁ &gt; n₂ 且 n₁sinθ₁ &gt; 1 時，不存在實數折射角，模型顯示全反射。</p>
+</div>
+</section>
+</div>
+
+<script>
+(() => {
+const svg=document.getElementById("waveSvg");
+const angle=document.getElementById("incAngle");
+const frequency=document.getElementById("frequency");
+const n1=document.getElementById("index1");
+const n2=document.getElementById("index2");
+const angleText=document.getElementById("incAngleText");
+const freqText=document.getElementById("frequencyText");
+const physics=document.getElementById("physicsResult");
+const check=document.getElementById("lawCheck");
+const NS="http://www.w3.org/2000/svg";
+const C=299792458;
+let running=true, phase=0, last=performance.now();
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function safe(v,f){return Number.isFinite(v)?v:f}
+
+function model(){
+ const theta1=clamp(safe(Number(angle.value),35),0,89);
+ const f=clamp(safe(Number(frequency.value),5),1,20);
+ const a=clamp(safe(Number(n1.value),1),1,3);
+ const b=clamp(safe(Number(n2.value),1.5),1,3);
+ const rad=theta1*Math.PI/180;
+ const snell=a*Math.sin(rad)/b;
+ const tir=snell>1;
+ const theta2=tir?null:Math.asin(clamp(snell,-1,1));
+ const v1=C/a, v2=C/b;
+ return {
+   theta1,rad,f,a,b,snell,tir,theta2,
+   v1,v2,lambda1:v1/f,lambda2:v2/f,
+   critical:a>b?Math.asin(b/a)*180/Math.PI:null
+ };
+}
+
+function E(tag,attrs={}){
+ const e=document.createElementNS(NS,tag);
+ Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));
+ return e;
+}
+function T(x,y,s,attrs={}){
+ const e=E("text",{x,y,...attrs});e.textContent=s;return e;
+}
+function L(x1,y1,x2,y2,attrs={}){
+ return E("line",{x1,y1,x2,y2,...attrs});
+}
+function speed(v){return (v/1e8).toFixed(3)+"×10⁸ m/s"}
+function wave(v){return v<1?(v*100).toFixed(2)+" cm":v.toFixed(3)+" m"}
+
+function render(d){
+ angleText.textContent=d.theta1.toFixed(0)+"°";
+ freqText.textContent=d.f.toFixed(1)+" Hz";
+
+ physics.innerHTML=
+ `n₁ sin θ₁ = <b>${(d.a*Math.sin(d.rad)).toFixed(5)}</b><br>`+
+ `n₂ = <b>${d.b.toFixed(2)}</b><br>`+
+ `θ₂ = <b>${d.tir?"不存在（全反射）":(d.theta2*180/Math.PI).toFixed(2)+"°"}</b><br>`+
+ `v₁ = <b>${speed(d.v1)}</b><br>`+
+ `v₂ = <b>${speed(d.v2)}</b><br>`+
+ `λ₁ = <b>${wave(d.lambda1)}</b><br>`+
+ `λ₂ = <b>${wave(d.lambda2)}</b><br>`+
+ `f₁ = f₂ = <b>${d.f.toFixed(1)} Hz</b>`;
+
+ if(d.tir){
+   check.className="check warning";
+   check.innerHTML="<b>⚠ 全反射</b><br>n₁sinθ₁ = "+d.snell.toFixed(3)+" &gt; 1，因此沒有實數折射角。"+
+     (d.critical!==null?"<br>臨界角 θc = "+d.critical.toFixed(2)+"°。":"");
+ }else{
+   const lhs=d.a*Math.sin(d.rad);
+   const rhs=d.b*Math.sin(d.theta2);
+   const err=Math.abs(lhs-rhs);
+   check.className=err<1e-10?"check ok":"check error";
+   check.innerHTML=err<1e-10?
+     "<b>✓ 物理檢查通過</b><br>Snell 定律誤差 "+err.toExponential(2)+"；頻率保持不變，且 λ = v/f。":
+     "<b>✕ 計算檢查失敗</b><br>Snell 定律殘差 "+err.toExponential(2)+"。";
+ }
+
+ drawScene(d);
+}
+
+function drawScene(d){
+ while(svg.firstChild)svg.removeChild(svg.firstChild);
+
+ const W=800,H=520,iy=270,cx=400;
+ svg.appendChild(E("rect",{x:0,y:0,width:W,height:iy,fill:"#eef2f7"}));
+ svg.appendChild(E("rect",{x:0,y:iy,width:W,height:H-iy,fill:"#e8f6f4"}));
+ const defs=E("defs");
+ const clip=E("clipPath",{id:"upperClip"});
+ clip.appendChild(E("rect",{x:0,y:0,width:W,height:iy}));
+ defs.appendChild(clip);
+ svg.appendChild(defs);
+ svg.appendChild(L(0,iy,W,iy,{stroke:"#475569","stroke-width":2}));
+ svg.appendChild(L(cx,30,cx,H-25,{stroke:"#dc2626","stroke-width":2,"stroke-dasharray":"8 7"}));
+ svg.appendChild(T(18,34,"介質 1",{fill:"#172033","font-size":17,"font-weight":"700"}));
+ svg.appendChild(T(18,H-18,"介質 2",{fill:"#172033","font-size":17,"font-weight":"700"}));
+ svg.appendChild(T(cx+9,45,"法線",{fill:"#dc2626","font-size":13}));
+
+ const reference=Math.min(d.lambda1,d.lambda2);
+ const pxPerM=clamp(70/reference,18,220);
+ const spacing1=clamp(d.lambda1*pxPerM,18,150);
+ const spacing2=clamp(d.lambda2*pxPerM,18,150);
+ const incX=Math.sin(d.rad),incY=Math.cos(d.rad);
+ const rayLen=250;
+
+ // 灰色入射波前填滿整個介質一。
+// 使用 upperClip 裁切，確保波前延伸完整但絕不進入介質二。
+for(let k=-12;k<=12;k++){
+   const offset=k*spacing1+((phase*45)%spacing1);
+   const px=cx-incX*offset,py=iy-incY*offset;
+
+   const len=520;
+   const x1=px-incY*len, y1=py+incX*len;
+   const x2=px+incY*len, y2=py-incX*len;
+
+   svg.appendChild(L(x1,y1,x2,y2,{
+     stroke:"#64748b","stroke-width":2,opacity:.78,
+     "clip-path":"url(#upperClip)"
+   }));
+ }
+ svg.appendChild(L(cx-incX*rayLen,iy-incY*rayLen,cx,iy,{stroke:"#334155","stroke-width":3}));
+ svg.appendChild(T(28,72,"入射波",{fill:"#475569","font-size":13,"font-weight":"700"}));
+
+ if(d.tir){
+   svg.appendChild(L(cx,iy,cx+incX*rayLen,iy-incY*rayLen,{stroke:"#b91c1c","stroke-width":3}));
+   for(let k=-8;k<=8;k++){
+     const offset=k*spacing1+((phase*45)%spacing1);
+     const px=cx+incX*offset,py=iy-incY*offset,len=470;
+     svg.appendChild(L(px-incY*len,py-incX*len,px+incY*len,py+incX*len,{
+       stroke:"#b91c1c","stroke-width":2,opacity:.65
+     }));
+   }
+   svg.appendChild(T(560,482,"全反射：沒有折射波",{fill:"#b91c1c","font-size":14,"font-weight":"700"}));
+ }else{
+   const r=d.theta2,rx=Math.sin(r),ry=Math.cos(r);
+   svg.appendChild(L(cx,iy,cx+rx*rayLen,iy+ry*rayLen,{stroke:"#0f766e","stroke-width":3}));
+   for(let k=-8;k<=8;k++){
+      const offset=k*spacing2+((phase*45*d.v2/d.v1)%spacing2);
+      const px=cx+rx*offset,py=iy+ry*offset,len=470;
+
+      const x1=px-ry*len, y1=py+rx*len;
+      const x2=px+ry*len, y2=py-rx*len;
+
+      // 綠色折射波前只能存在於介質二。
+      // 若整條或部分進入介質一，只保留介面以下的部分。
+      if(y1 >= iy && y2 >= iy){
+        svg.appendChild(L(x1,y1,x2,y2,{
+          stroke:"#0f766e","stroke-width":2,opacity:.78
+        }));
+      }else if(y1 < iy && y2 < iy){
+        continue;
+      }else{
+        const t=(iy-y1)/(y2-y1);
+        const xi=x1+t*(x2-x1);
+        if(y1 >= iy){
+          svg.appendChild(L(x1,y1,xi,iy,{
+            stroke:"#0f766e","stroke-width":2,opacity:.78
+          }));
+        }else{
+          svg.appendChild(L(xi,iy,x2,y2,{
+            stroke:"#0f766e","stroke-width":2,opacity:.78
+          }));
+        }
+      }
+    }
+    svg.appendChild(T(620,482,"折射波",{fill:"#0f766e","font-size":14,"font-weight":"700"}));
+ }
+
+ const arcR=58;
+ const p1x=cx+arcR*Math.sin(d.rad),p1y=iy-arcR*Math.cos(d.rad);
+ svg.appendChild(E("path",{
+   d:`M ${cx} ${iy-arcR} A ${arcR} ${arcR} 0 0 1 ${p1x} ${p1y}`,
+   fill:"none",stroke:"#334155","stroke-width":2
+ }));
+ svg.appendChild(T(cx+30,iy-68,"θ₁",{fill:"#172033","font-size":14,"font-weight":"700"}));
+
+ if(!d.tir){
+   const r=d.theta2,p2x=cx+arcR*Math.sin(r),p2y=iy+arcR*Math.cos(r);
+   svg.appendChild(E("path",{
+     d:`M ${cx} ${iy+arcR} A ${arcR} ${arcR} 0 0 0 ${p2x} ${p2y}`,
+     fill:"none",stroke:"#0f766e","stroke-width":2
+   }));
+   svg.appendChild(T(cx+30,iy+72,"θ₂",{fill:"#0f766e","font-size":14,"font-weight":"700"}));
+ }
+
+ svg.appendChild(T(18,104,"λ₁ = "+wave(d.lambda1),{fill:"#475569","font-size":12}));
+ svg.appendChild(T(18,124,"λ₂ = "+wave(d.lambda2),{fill:"#0f766e","font-size":12}));
+}
+
+function animate(now){
+ const dt=Math.min((now-last)/1000,.05);
+ last=now;
+ if(running)phase=(phase+dt)%100000;
+ render(model());
+ requestAnimationFrame(animate);
+}
+
+[angle,frequency,n1,n2].forEach(x=>x.addEventListener("input",()=>render(model())));
+document.getElementById("startBtn").onclick=()=>running=true;
+document.getElementById("pauseBtn").onclick=()=>running=false;
+document.getElementById("stepBtn").onclick=()=>{running=false;phase+=.035;render(model())};
+document.getElementById("resetBtn").onclick=()=>{
+ angle.value=35;frequency.value=5;n1.value="1.00";n2.value="1.50";
+ phase=0;running=true;render(model());
+};
+
+render(model());
+requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>
